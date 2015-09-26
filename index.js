@@ -11,8 +11,9 @@ var marked = require('marked');
 var NAME = 'gulp-markdown-to-json';
 var PluginError = gutil.PluginError;
 var streamingErr = new PluginError(NAME, 'Streaming not supported');
+var rendererErr = new PluginError(NAME, 'Must provide a Markdown rendering function that accepts a string of raw Markdown as a first argument');
 
-function parse( file, flatten ){
+function parse( markdown, file, flatten ){
   if( file.isNull() ) return;
   if( file.isStream() ) return this.emit('error', streamingErr);
 
@@ -21,7 +22,8 @@ function parse( file, flatten ){
     var parsed = frontmatter(file.contents.toString());
 
     var body = parsed.body.split(/\n/);
-    var markup = marked(parsed.body).split(/\n/);
+
+    var markup = markdown.render(parsed.body).split(/\n/);
 
     var title = markup[0].substr(0,3) === '<h1'
       ? body[0]
@@ -36,7 +38,7 @@ function parse( file, flatten ){
         : title;
       data[path].body = markup.slice(1).join(' ');
     } else {
-      data[path].body = marked(parsed.body);
+      data[path].body = markdown.render(parsed.body);
     }
 
     if( flatten ) data = data[path];
@@ -48,12 +50,10 @@ function parse( file, flatten ){
   }
 }
 
-module.exports = function( config, marked_options ){
-  var options = config && marked_options
-    ? marked_options
-    : config;
+module.exports = function( renderer, config ){
+  //if( !renderer || typeof renderer !== 'function' ) return this.emit('error', rendererErr);
 
-  marked.setOptions(options);
+  //console.log(renderer);
 
   var stream = through.obj(function( input, enc, callback ){
     var file;
@@ -62,7 +62,7 @@ module.exports = function( config, marked_options ){
       var data = {};
 
       input.forEach(function( file ){
-        var file_data = JSON.parse( parse(file).contents.toString() );
+        var file_data = JSON.parse( renderer, parse(file).contents.toString() );
 
         data = extend(file_data, data);
       });
@@ -81,7 +81,7 @@ module.exports = function( config, marked_options ){
         contents: new Buffer(json)
       });
     } else {
-      file = parse(input, true);
+      file = parse(renderer, input, true);
     }
 
     this.push(file);
