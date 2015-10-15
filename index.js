@@ -1,5 +1,6 @@
 var gutil = require('gulp-util');
 var extend = require('util-extend');
+var mapValues = require('lodash.mapvalues');
 var sort = require('sort-object');
 var through = require('through2');
 var util = require('util');
@@ -22,6 +23,26 @@ function parse( markdown, file, flatten ){
     var parsed = frontmatter(file.contents.toString());
 
     var body = parsed.body.split(/\n/);
+
+    function renderProperties (obj) {
+      if (!obj || Object.keys(obj).length === 0) return obj;
+
+      obj = mapValues(obj, function (val) {
+        if (typeof val !== 'string') return val;
+        return markdown.renderInline(val);
+      });
+
+      Object.keys(obj).forEach(function (prop) {
+        if (!Array.isArray(obj[prop])) return;
+        obj[prop] = obj[prop].map(function (item) {
+          return renderProperties(item);
+        });
+      });
+
+      return obj;
+    }
+
+    parsed.attributes = renderProperties(parsed.attributes);
 
     var markup = markdown.render(parsed.body).split(/\n/);
 
